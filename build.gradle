@@ -1,34 +1,105 @@
 plugins {
     id 'java'
+    id 'java-library'
+    id 'maven-publish'
 }
+
 
 java {
     toolchain {
-        languageVersion = JavaLanguageVersion.of(17)
+        languageVersion.set(JavaLanguageVersion.of(17))
     }
 }
-
 
 group = 'com.example'
 version = '1.0-SNAPSHOT'
 
+ext {
+    versions = [
+            testng          : '7.9.0',
+            selenium       : '4.20.0',
+            restAssured    : '5.4.0',
+            appium         : '9.0.0',
+            webdriverManager: '6.1.0',
+            log4j          : '2.24.3',
+            reportng       : '1.1.4',
+            guice          : '5.1.0',
+            lombok         : '1.18.30',
+            jackson        : '2.15.2'
+    ]
+}
+
 repositories {
     mavenCentral()
 }
-ext {
-    testngVersion = '7.9.0'
-    seleniumVersion = '4.20.0'
-    restAssuredVersion = '5.4.0'
-    appiumVersion = '9.0.0'
-}
 
 dependencies {
-    testImplementation "org.testng:testng:$testngVersion"
-    testImplementation "org.seleniumhq.selenium:selenium-java:$seleniumVersion"
-    testImplementation "io.rest-assured:rest-assured:$restAssuredVersion"
-    testImplementation "io.appium:java-client:$appiumVersion"
+    implementation("org.testng:testng:${versions.testng}")
+    implementation("org.seleniumhq.selenium:selenium-java:${versions.selenium}")
+    implementation("io.github.bonigarcia:webdrivermanager:${versions.webdriverManager}")
+    implementation("io.rest-assured:rest-assured:${versions.restAssured}")
+    implementation("io.rest-assured:json-path:${versions.restAssured}")
+    implementation("io.rest-assured:xml-path:${versions.restAssured}")
+    implementation("io.appium:java-client:${versions.appium}")
+    implementation("org.apache.logging.log4j:log4j-core:${versions.log4j}")
+    implementation("org.apache.logging.log4j:log4j-api:${versions.log4j}")
+    implementation("org.uncommons:reportng:${versions.reportng}")
+    implementation("com.google.inject:guice:${versions.guice}")
+    compileOnly("org.projectlombok:lombok:${versions.lombok}")
+    annotationProcessor("org.projectlombok:lombok:${versions.lombok}")
+    implementation("com.fasterxml.jackson.core:jackson-databind:${versions.jackson}")
+}
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+        }
+    }
 }
 
 test {
-    useTestNG()
+    useTestNG {
+        suites file('src/test/resources/testng.xml')
+        parallel 'methods'
+        threadCount = 3
+        outputDirectory = layout.buildDirectory.dir("test-output").get().asFile
+        useDefaultListeners = true
+
+        systemProperties = [
+                'testng.dtd.http': 'true',
+                'log4j.configurationFile': 'src/test/resources/log4j2.xml',
+                'org.uncommons.reportng.escape-output': 'false'
+        ]
+
+        preserveOrder = true
+
+        if (project.hasProperty('groups')) {
+            includeGroups = project.property('groups')
+        }
+    }
+
+    reports {
+        html.required = true
+        junitXml.required = true
+    }
+
+    testLogging {
+        events "passed", "skipped", "failed"
+        showStandardStreams = true
+        showExceptions = true
+        showCauses = true
+        showStackTraces = true
+        exceptionFormat = 'full'
+    }
+
+    maxParallelForks = Runtime.runtime.availableProcessors().intdiv(2) ?: 1
 }
+
+tasks.register('cleanReports', Delete) {
+    delete layout.buildDirectory.dir("test-output")
+    delete layout.buildDirectory.dir("reports")
+}
+
+test.dependsOn cleanReports
+
+defaultTasks 'clean', 'test'
